@@ -1,0 +1,1516 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111113">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="타임캠">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<style>:root{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>타임캠</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* Layout: one camera-body column — viewfinder, EXIF-style readout, generation/style controls, shutter row.
+   Deliberately a single dark look, like a camera screen; yellow is the app's own accent. */
+:root {
+  color-scheme: dark;
+  --body: #111113;
+  --void: #050506;
+  --panel: #1c1c20;
+  --line: #2d2d34;
+  --ink: #f1eee6;
+  --muted: #8f8c84;
+  --signal: #ffcc0a;
+  --signal-ink: #1d1700;
+  --rec: #ff453a;
+  --scrim: rgba(5, 5, 6, 0.72);
+  --font-ui: "IBM Plex Sans KR", -apple-system, "Apple SD Gothic Neo", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+html, body { background: var(--body); color: var(--ink); }
+body { font-family: var(--font-ui); -webkit-font-smoothing: antialiased; word-break: keep-all; }
+
+.cam {
+  max-width: 540px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { font-weight: 600; font-size: 17px; letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 8px; }
+.brand small { font: 500 10px var(--font-data); color: var(--muted); letter-spacing: 0.14em; }
+.modes { display: flex; background: var(--panel); border-radius: 999px; padding: 3px; }
+.mode {
+  appearance: none; border: 0; background: transparent; color: var(--muted);
+  font: 600 13px var(--font-ui); padding: 6px 15px; border-radius: 999px; cursor: pointer;
+}
+.mode[aria-pressed="true"] { background: var(--signal); color: var(--signal-ink); }
+.mode:disabled { opacity: 0.5; cursor: default; }
+
+.finder {
+  position: relative;
+  width: 100%;
+  height: min(58vh, calc((100vw - 32px) * 4 / 3));
+  min-height: 260px;
+  background: var(--void);
+  border-radius: 6px;
+  overflow: hidden;
+}
+/* 스타일 조정 중에는 화면을 줄여 셔터가 한 화면에 보이게 */
+.cam[data-tab="style"] .finder { height: min(40vh, calc((100vw - 32px) * 4 / 3)); }
+.finder > img, .finder > canvas, .finder > video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.finder img:not([src]), .finder img[src=""] { visibility: hidden; }
+.empty {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  padding: 24px; text-align: center;
+}
+.empty p { font-size: 15px; line-height: 1.6; color: var(--ink); white-space: pre-line; max-width: 32ch; }
+.empty-btn {
+  appearance: none; border: 0; cursor: pointer;
+  background: var(--signal); color: var(--signal-ink);
+  font: 600 15px var(--font-ui); padding: 12px 24px; border-radius: 999px;
+}
+.empty-btn:disabled { opacity: 0.4; cursor: default; }
+.recbar {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 6px;
+  background: var(--rec); color: var(--ink);
+  font: 600 13px var(--font-data); font-variant-numeric: tabular-nums;
+  padding: 4px 10px; border-radius: 6px;
+}
+.recbar .rec-dot { background: var(--ink); margin: 0; }
+.compare {
+  position: absolute; top: 8px; right: 8px;
+  appearance: none; border: 1px solid var(--line); cursor: pointer;
+  font: 600 12px var(--font-ui); color: var(--ink); background: var(--scrim);
+  padding: 6px 10px; border-radius: 8px;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none;
+}
+.note {
+  position: absolute; inset: 0; white-space: pre-line;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  padding: 24px; font-size: 15px; line-height: 1.55; color: var(--ink);
+  background: var(--scrim);
+}
+.note[data-soft] { background: transparent; align-items: flex-end; font-size: 13px; color: var(--ink); pointer-events: none; }
+.note[data-soft] span { background: var(--scrim); padding: 6px 10px; border-radius: 6px; }
+.busy { gap: 12px; flex-direction: column; }
+.busy button {
+  appearance: none; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  font: 500 13px var(--font-ui); padding: 8px 14px; border-radius: 10px; cursor: pointer;
+}
+.rec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--rec); margin-right: 6px; }
+.flash { position: absolute; inset: 0; background: var(--void); }
+.toast {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+  font-size: 13px; padding: 8px 14px; border-radius: 999px; white-space: nowrap;
+}
+
+.gen { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.gen-name { font: 600 30px/1 var(--font-data); letter-spacing: -0.02em; }
+.gen-year { font: 500 14px var(--font-data); color: var(--muted); }
+.limits { display: flex; gap: 6px; flex-wrap: wrap; }
+.limit {
+  font-size: 11px; color: var(--muted); border: 1px solid var(--line);
+  padding: 2px 7px; border-radius: 999px;
+}
+.readout {
+  font: 400 12px/1.6 var(--font-data); color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 2px 14px;
+  font-variant-numeric: tabular-nums;
+}
+.readout b { color: var(--ink); font-weight: 500; }
+
+.tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line); }
+.tab {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  color: var(--muted); font: 600 14px var(--font-ui);
+  padding: 4px 0 9px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  display: flex; align-items: center; gap: 6px;
+}
+.tab[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--signal); }
+.tab .badge { font: 500 11px var(--font-ui); color: var(--signal); }
+
+.dial {
+  display: flex; gap: 6px;
+  overflow-x: auto; scroll-snap-type: x proximity;
+  padding-bottom: 4px; scrollbar-width: none;
+}
+.dial::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none; appearance: none; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 54px; padding: 7px 10px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); color: var(--ink);
+  scroll-snap-align: center;
+}
+.chip .y { font: 500 10px var(--font-data); color: var(--muted); }
+.chip .n { font: 600 15px var(--font-data); }
+.chip[aria-pressed="true"] { background: var(--signal); border-color: var(--signal); color: var(--signal-ink); }
+.chip[aria-pressed="true"] .y { color: var(--signal-ink); }
+.chip:disabled { opacity: 0.4; cursor: default; }
+
+.style-panel { display: flex; flex-direction: column; gap: 14px; }
+.styles { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.styles::-webkit-scrollbar { display: none; }
+.style-btn {
+  flex: none; appearance: none; border: 0; background: transparent; cursor: pointer; padding: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 5px; width: 64px;
+  color: var(--muted); font: 500 11px var(--font-ui); white-space: nowrap;
+}
+.style-btn img { width: 60px; height: 60px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); object-fit: cover; }
+.style-btn[aria-pressed="true"] { color: var(--ink); }
+.style-btn[aria-pressed="true"] img { border-color: var(--signal); }
+.style-btn:disabled { opacity: 0.4; cursor: default; }
+.tune { display: flex; gap: 16px; align-items: center; }
+.pad {
+  position: relative; flex: none; width: 132px; height: 132px; border-radius: 12px;
+  background:
+    linear-gradient(var(--line), var(--line)) center / 1px 100% no-repeat,
+    linear-gradient(var(--line), var(--line)) center / 100% 1px no-repeat,
+    var(--panel);
+  touch-action: none; cursor: crosshair; -webkit-user-select: none; user-select: none;
+}
+.pad:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.pad[aria-disabled="true"] { opacity: 0.4; cursor: default; }
+.pad-dot {
+  position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
+  background: var(--signal); box-shadow: 0 0 0 3px var(--body); pointer-events: none;
+}
+.pad-ax { position: absolute; font: 500 10px var(--font-ui); color: var(--muted); pointer-events: none; }
+.pad-ax.t { top: 5px; left: 50%; transform: translateX(-50%); }
+.pad-ax.b { bottom: 5px; left: 50%; transform: translateX(-50%); }
+.pad-ax.l { left: 6px; top: 50%; transform: translateY(-50%); }
+.pad-ax.r { right: 6px; top: 50%; transform: translateY(-50%); }
+.tune-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.tune-vals { display: flex; gap: 16px; font: 400 12px var(--font-data); color: var(--muted); font-variant-numeric: tabular-nums; }
+.tune-vals b { color: var(--ink); font-weight: 500; }
+.tune-side label { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+.tune-side label b { font: 500 12px var(--font-data); color: var(--ink); }
+#palette { width: 100%; accent-color: var(--signal); }
+.reset {
+  align-self: flex-start; appearance: none; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  font: 500 12px var(--font-ui); padding: 6px 12px; border-radius: 8px;
+}
+.reset:disabled { opacity: 0.4; cursor: default; }
+
+.actions { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding-top: 4px; }
+.slot { display: flex; }
+.slot.l { justify-content: flex-start; }
+.slot.r { justify-content: flex-end; }
+.side-btn {
+  appearance: none; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  font: 500 14px var(--font-ui); padding: 11px 14px; border-radius: 12px; min-width: 80px;
+}
+.side-btn:disabled { opacity: 0.4; cursor: default; }
+.shutter {
+  appearance: none; cursor: pointer;
+  width: 78px; height: 78px; border-radius: 50%;
+  border: 4px solid var(--ink); background: transparent; padding: 5px;
+}
+.shutter span { display: block; width: 100%; height: 100%; border-radius: 50%; background: var(--ink); transition: transform 0.15s ease, border-radius 0.15s ease; }
+.shutter:active span { transform: scale(0.9); }
+.shutter[data-mode="video"] span { background: var(--rec); }
+.shutter[data-rec] span { border-radius: 8px; transform: scale(0.5); }
+.shutter:disabled { opacity: 0.4; cursor: default; }
+
+.tip { font-size: 13px; color: var(--ink); text-align: center; }
+.foot { font-size: 12px; line-height: 1.6; color: var(--muted); max-width: 60ch; }
+.offscreen { position: fixed; width: 2px; height: 2px; opacity: 0; pointer-events: none; left: 0; top: 0; }
+
+button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .shutter span { transition: none; } }
+</style>
+
+</head>
+<body>
+<main class="cam" data-tab="gen">
+  <header class="top">
+    <div class="brand">타임캠 <small>WEB</small></div>
+    <div class="modes" role="group" aria-label="촬영 모드">
+      <button class="mode" id="mode-photo" aria-pressed="true">사진</button>
+      <button class="mode" id="mode-video" aria-pressed="false">동영상</button>
+    </div>
+  </header>
+
+  <section class="finder" id="finder" aria-label="카메라 화면">
+    <canvas id="gl" hidden></canvas>
+    <img id="photo-out" alt="세대 효과가 적용된 사진" hidden>
+    <video id="review-video" playsinline loop controls hidden></video>
+    <div class="empty" id="empty" hidden>
+      <p id="empty-text"></p>
+      <button class="empty-btn" id="empty-open">카메라 열기</button>
+    </div>
+    <span class="recbar" id="recbar" hidden><span class="rec-dot"></span><span id="rec-time">0:00</span></span>
+    <button class="compare" id="compare" aria-label="누르고 있는 동안 효과 없이 보기" hidden>원본</button>
+    <div class="note" id="note" hidden></div>
+    <div class="note busy" id="busy" hidden><span id="busy-text">처리 중</span><button id="busy-cancel" hidden>취소</button></div>
+    <div class="flash" id="flash" hidden></div>
+    <div class="toast" id="toast" role="status" hidden></div>
+  </section>
+
+  <div>
+    <div class="gen">
+      <span class="gen-name" id="gen-name">4</span>
+      <span class="gen-year" id="gen-year">2010</span>
+      <div class="limits" id="limits"></div>
+    </div>
+    <div class="readout" id="readout" aria-live="polite"></div>
+  </div>
+
+  <div class="tabs" role="group" aria-label="조정 항목">
+    <button class="tab" id="tab-gen" aria-pressed="true">세대</button>
+    <button class="tab" id="tab-style" aria-pressed="false">스타일 <span class="badge" id="style-badge"></span></button>
+  </div>
+  <nav class="dial" id="dial" aria-label="세대 선택"></nav>
+  <section class="style-panel" id="style-panel" aria-label="스타일" hidden>
+    <div class="styles" id="styles"></div>
+    <div class="tune">
+      <div class="pad" id="pad" tabindex="0" role="group" aria-label="톤과 색상 조정. 방향키로 움직이고, 두 번 누르면 가운데로 돌아갑니다">
+        <span class="pad-ax t">밝게</span><span class="pad-ax b">어둡게</span>
+        <span class="pad-ax l">차분</span><span class="pad-ax r">선명</span>
+        <span class="pad-dot" id="pad-dot"></span>
+      </div>
+      <div class="tune-side">
+        <div class="tune-vals"><span>톤 <b id="tone-val">0</b></span><span>색상 <b id="color-val">0</b></span></div>
+        <label for="palette">팔레트 <b id="palette-val">100</b></label>
+        <input type="range" id="palette" min="0" max="100" step="1" value="100">
+        <button class="reset" id="style-reset">초기화</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="actions">
+    <div class="slot l">
+      <button class="side-btn" id="pick">앨범</button>
+      <button class="side-btn" id="back" hidden>카메라</button>
+    </div>
+    <button class="shutter" id="shoot" data-mode="photo" aria-label="사진 찍기"><span></span></button>
+    <div class="slot r">
+      <button class="side-btn" id="flip" hidden>전환</button>
+      <button class="side-btn" id="save" hidden>저장</button>
+    </div>
+  </div>
+  <p class="tip" id="tip" hidden></p>
+
+  <p class="foot">세대를 고르면 그 시절 아이폰의 화소·화각·색감·노이즈가 입혀지고, 스타일 탭에서 아이폰처럼 톤·색상을 조정할 수 있습니다. 찍은 뒤에도 세대와 스타일을 바꿔 가며 비교해 보세요.</p>
+
+  <input id="file-pick" class="offscreen" type="file" accept="image/*,video/*" tabindex="-1" aria-hidden="true">
+  <input id="file-shoot" class="offscreen" type="file" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true">
+  <video id="cam-video" class="offscreen" playsinline muted autoplay aria-hidden="true"></video>
+  <video id="src-video" class="offscreen" playsinline muted loop preload="auto" aria-hidden="true"></video>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- 세대 데이터 (아이폰 앱 CameraPreset.swift 와 같은 값) ----------
+  const VIDEO = {
+    vga:   { label: "VGA",   w: 640,  h: 480,  bitrate: 3.5e6 },
+    hd720: { label: "720p",  w: 1280, h: 720,  bitrate: 10e6 },
+    hd1080:{ label: "1080p", w: 1920, h: 1080, bitrate: 17e6 },
+    uhd4k: { label: "4K",    w: 3840, h: 2160, bitrate: 45e6 },
+  };
+  const LOOK = { saturation: 1, contrast: 1, warmth: 0, tint: 0, harshness: 0, fade: 0, softness: 0, noise: 0, vignette: 0, sharpen: 0, jpegQuality: 0.92 };
+  const g = (code, name, year, mp, focal, af, flash, front, video, look) =>
+    ({ code, name, year, mp, focal, af, flash, front, video, look: Object.assign({}, LOOK, look) });
+  const GENS = [
+    g("1", "1세대", 2007, 2, 37, false, false, false, null,
+      { saturation: 0.75, contrast: 1.15, warmth: 0.35, tint: 0.1, harshness: 0.8, fade: 0.04, softness: 0.7, noise: 0.6, vignette: 0.5, jpegQuality: 0.6 }),
+    g("3G", "3G", 2008, 2, 37, false, false, false, null,
+      { saturation: 0.78, contrast: 1.14, warmth: 0.3, tint: 0.08, harshness: 0.78, fade: 0.04, softness: 0.65, noise: 0.55, vignette: 0.5, jpegQuality: 0.6 }),
+    g("3GS", "3GS", 2009, 3, 37, true, false, false, "vga",
+      { saturation: 0.82, contrast: 1.12, warmth: 0.25, tint: 0.05, harshness: 0.7, fade: 0.03, softness: 0.5, noise: 0.5, vignette: 0.4, jpegQuality: 0.65 }),
+    g("4", "4", 2010, 5, 30, true, true, true, "hd720",
+      { saturation: 0.9, contrast: 1.1, warmth: 0.15, tint: -0.1, harshness: 0.55, fade: 0.02, softness: 0.3, noise: 0.4, vignette: 0.3, sharpen: 0.1, jpegQuality: 0.75 }),
+    g("4S", "4S", 2011, 8, 35, true, true, true, "hd1080",
+      { saturation: 0.95, contrast: 1.08, warmth: 0.1, tint: -0.05, harshness: 0.45, fade: 0.02, softness: 0.2, noise: 0.3, vignette: 0.25, sharpen: 0.15, jpegQuality: 0.8 }),
+    g("5", "5", 2012, 8, 33, true, true, true, "hd1080",
+      { saturation: 0.95, contrast: 1.06, warmth: 0.05, tint: 0.05, harshness: 0.4, fade: 0.01, softness: 0.15, noise: 0.28, vignette: 0.2, sharpen: 0.2, jpegQuality: 0.82 }),
+    g("5s", "5s", 2013, 8, 30, true, true, true, "hd1080",
+      { warmth: 0.05, harshness: 0.35, fade: 0.01, softness: 0.1, noise: 0.22, vignette: 0.15, sharpen: 0.2, jpegQuality: 0.85 }),
+    g("6", "6", 2014, 8, 29, true, true, true, "hd1080",
+      { contrast: 1.05, warmth: 0.03, harshness: 0.3, softness: 0.08, noise: 0.2, vignette: 0.12, sharpen: 0.25, jpegQuality: 0.85 }),
+    g("6s", "6s", 2015, 12, 29, true, true, true, "uhd4k",
+      { saturation: 1.02, contrast: 1.04, warmth: 0.03, harshness: 0.25, softness: 0.05, noise: 0.16, vignette: 0.1, sharpen: 0.25, jpegQuality: 0.88 }),
+    g("7", "7", 2016, 12, 28, true, true, true, "uhd4k",
+      { saturation: 1.05, contrast: 1.04, harshness: 0.2, softness: 0.03, noise: 0.14, vignette: 0.08, sharpen: 0.25, jpegQuality: 0.88 }),
+    g("8", "8", 2017, 12, 28, true, true, true, "uhd4k",
+      { saturation: 1.05, contrast: 1.03, harshness: 0.15, noise: 0.12, vignette: 0.06, sharpen: 0.3, jpegQuality: 0.9 }),
+    g("X", "X", 2017, 12, 28, true, true, true, "uhd4k",
+      { saturation: 1.06, contrast: 1.03, warmth: -0.05, harshness: 0.12, noise: 0.1, vignette: 0.05, sharpen: 0.3, jpegQuality: 0.9 }),
+    g("XS", "XS", 2018, 12, 26, true, true, true, "uhd4k",
+      { saturation: 1.05, contrast: 0.97, harshness: -0.15, softness: 0.05, noise: 0.06, vignette: 0.03, sharpen: 0.2, jpegQuality: 0.9 }),
+    g("11", "11", 2019, 12, 26, true, true, true, "uhd4k",
+      { saturation: 1.08, contrast: 0.98, warmth: 0.05, harshness: -0.15, noise: 0.05, sharpen: 0.25 }),
+    g("12", "12", 2020, 12, 26, true, true, true, "uhd4k",
+      { saturation: 1.08, contrast: 0.98, harshness: -0.15, noise: 0.04, sharpen: 0.25 }),
+    g("13", "13", 2021, 12, 26, true, true, true, "uhd4k",
+      { saturation: 1.1, contrast: 0.97, harshness: -0.2, noise: 0.03, sharpen: 0.3 }),
+    g("14", "14", 2022, 12, 26, true, true, true, "uhd4k",
+      { saturation: 1.08, contrast: 0.98, harshness: -0.15, noise: 0.03, sharpen: 0.2 }),
+    g("15", "15", 2023, 48, 26, true, true, true, "uhd4k",
+      { saturation: 1.04, harshness: -0.1, noise: 0.02, sharpen: 0.15 }),
+    g("16", "16", 2024, 48, 26, true, true, true, "uhd4k",
+      { saturation: 1.03, contrast: 1.01, harshness: -0.05, noise: 0.01, sharpen: 0.1 }),
+    g("17", "17", 2025, 48, 26, true, true, true, "uhd4k",
+      { saturation: 1.02, contrast: 1.01, sharpen: 0.05 }),
+    g("18", "18", 2026, 48, 24, true, true, true, "uhd4k", {}),
+  ];
+
+  // ---------- 스타일 (아이폰 16·17의 사진 스타일과 같은 구성: 피부 톤 5종 + 분위기 8종 + 흑백 2종) ----------
+  // 세대 효과 위에 덧입힌다. 값은 각 스타일 설명을 바탕으로 잡은 근사값이다.
+  const st = (key, name, p) => Object.assign({ key, name, warm: 0, tint: 0, sat: 1, con: 1, lift: 0, bright: 0, shadow: [0, 0, 0], high: [0, 0, 0], bw: 0 }, p);
+  const STYLES = [
+    st("standard", "표준", {}),
+    st("coolRose", "쿨 로즈", { warm: -0.35, tint: 0.3, high: [0.02, 0, 0.025] }),
+    st("neutral", "뉴트럴", { warm: -0.3, sat: 0.9 }),
+    st("roseGold", "로즈 골드", { warm: 0.35, tint: 0.35, sat: 1.05 }),
+    st("gold", "골드", { warm: 0.5, tint: -0.05, sat: 1.08, bright: 0.06 }),
+    st("amber", "앰버", { warm: 0.65, tint: 0.05, sat: 1.05, shadow: [0.02, 0.008, -0.01] }),
+    st("vibrant", "비비드", { sat: 1.35, con: 1.06 }),
+    st("natural", "내추럴", { sat: 0.95, con: 0.96 }),
+    st("luminous", "루미너스", { warm: 0.1, tint: 0.15, sat: 1.1, bright: 0.12, lift: 0.03 }),
+    st("dramatic", "드라마틱", { warm: -0.1, sat: 0.85, con: 1.25, shadow: [-0.01, 0, 0.015] }),
+    st("quiet", "콰이어트", { warm: 0.25, tint: 0.05, sat: 0.7, con: 0.88, lift: 0.06 }),
+    st("cozy", "코지", { warm: 0.5, tint: 0.2, sat: 1.12, con: 1.05, bright: -0.06 }),
+    st("ethereal", "에테리얼", { warm: -0.3, tint: 0.1, sat: 0.75, con: 0.85, lift: 0.07, bright: 0.06, high: [0, 0.01, 0.03] }),
+    st("mutedBW", "흑백 뮤트", { bw: 1, con: 0.85, lift: 0.05 }),
+    st("starkBW", "흑백 스타크", { bw: 1, con: 1.35 }),
+  ];
+  const DEVICE_FOCAL = 26;      // 지금 아이폰 메인 카메라 화각(35mm 환산) — 구형은 이보다 좁아 가운데를 잘라 재현
+  const WEB_VIDEO_EDGE = 1920;  // 웹에서는 동영상을 최대 1080p 로 만든다
+  const PREVIEW_EDGE = 1280;    // 사진 모드 실시간 화면의 최대 크기 (찍을 때는 원래 해상도로 처리)
+
+  // ---------- 화면 요소 ----------
+  const $ = (id) => document.getElementById(id);
+  const ui = {
+    cam: document.querySelector(".cam"),
+    modePhoto: $("mode-photo"), modeVideo: $("mode-video"),
+    gl: $("gl"), photoOut: $("photo-out"), reviewVideo: $("review-video"),
+    empty: $("empty"), emptyText: $("empty-text"), emptyOpen: $("empty-open"),
+    recbar: $("recbar"), recTime: $("rec-time"), compare: $("compare"),
+    note: $("note"), busy: $("busy"), busyText: $("busy-text"), busyCancel: $("busy-cancel"), flash: $("flash"), toast: $("toast"),
+    genName: $("gen-name"), genYear: $("gen-year"), limits: $("limits"), readout: $("readout"),
+    tabGen: $("tab-gen"), tabStyle: $("tab-style"), styleBadge: $("style-badge"),
+    dial: $("dial"), stylePanel: $("style-panel"), styles: $("styles"), pad: $("pad"), padDot: $("pad-dot"),
+    toneVal: $("tone-val"), colorVal: $("color-val"), palette: $("palette"), paletteVal: $("palette-val"), styleReset: $("style-reset"),
+    pick: $("pick"), back: $("back"), shoot: $("shoot"), flip: $("flip"), save: $("save"), tip: $("tip"),
+    filePick: $("file-pick"), fileShoot: $("file-shoot"), camVideo: $("cam-video"), srcVideo: $("src-video"),
+  };
+  const inViewer = !!(window.claude && typeof window.claude.use === "function");
+
+  const state = {
+    mode: "photo",
+    view: "camera",       // camera: 촬영 화면 / review: 찍은(고른) 결과 화면
+    index: GENS.findIndex((x) => x.code === "4"),
+    style: { key: "standard", tone: 0, color: 0, palette: 1 },
+    cam: { stream: null, audio: null, micAsked: false, facing: "environment", live: false, starting: false, reason: null },
+    photo: null,          // 결과 화면의 원본 사진 { el, w, h, originalURL }
+    photoId: 0,
+    result: null,         // 효과를 입혀 압축한 사진 { blob, url, gen }
+    clip: null,           // 결과 화면의 동영상 { kind: "picked" } | { kind: "recorded", blob, url, ext, gen, dims }
+    recording: null,
+    exporting: null,
+    renderToken: 0,
+    showOriginal: false,
+    userPaused: false,
+    locked: false,
+  };
+  try {
+    const saved = localStorage.getItem("timecam.gen");
+    const i = GENS.findIndex((x) => x.code === saved);
+    if (i >= 0) state.index = i;
+    const savedStyle = JSON.parse(localStorage.getItem("timecam.style") || "null");
+    if (savedStyle && STYLES.some((x) => x.key === savedStyle.key)) Object.assign(state.style, savedStyle);
+  } catch (e) { /* 저장소를 못 써도 기본값으로 시작 */ }
+  const gen = () => GENS[state.index];
+
+  // ---------- WebGL 필터 (앱의 Core Image 단계와 같은 순서) ----------
+  const glc = ui.gl.getContext("webgl", { preserveDrawingBuffer: true, alpha: false, antialias: false, premultipliedAlpha: false });
+  if (!glc) {
+    ui.empty.hidden = false;
+    ui.emptyText.textContent = "이 브라우저는 WebGL을 지원하지 않아 효과를 입힐 수 없어요.";
+    ui.emptyOpen.hidden = true;
+    return;
+  }
+  const VERT = `
+    attribute vec2 a_pos;
+    varying vec2 v_uv;
+    void main() { v_uv = a_pos * 0.5 + 0.5; gl_Position = vec4(a_pos, 0.0, 1.0); }`;
+  const FRAG = `
+    precision highp float;
+    varying vec2 v_uv;
+    uniform sampler2D u_src;
+    uniform sampler2D u_lut;
+    uniform vec4 u_crop;    // 원본 텍스처 안에서 쓸 영역 (uv)
+    uniform vec2 u_size;    // 결과 픽셀 크기
+    uniform float u_sat, u_blur, u_sharp, u_noise, u_vig, u_seed;
+    uniform float u_stOn, u_stGamma, u_stSat, u_stCon, u_stLift, u_stBW;
+    uniform vec3 u_stMul, u_stShadow, u_stHigh;
+
+    float hash12(vec2 p) {
+      vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+      p3 += dot(p3, p3.yzx + 33.33);
+      return fract((p3.x + p3.y) * p3.z);
+    }
+    vec3 src(vec2 uv) { return texture2D(u_src, u_crop.xy + clamp(uv, 0.0, 1.0) * u_crop.zw).rgb; }
+    float lut(float x, int ch) {
+      vec4 t = texture2D(u_lut, vec2((clamp(x, 0.0, 1.0) * 255.0 + 0.5) / 256.0, 0.5));
+      return ch == 0 ? t.r : (ch == 1 ? t.g : t.b);
+    }
+    void main() {
+      vec2 px = 1.0 / u_size;
+      vec3 c = src(v_uv);
+      // 렌즈 흐림: 원반 모양으로 주변 16점을 평균
+      if (u_blur > 0.05) {
+        vec3 acc = c;
+        for (int i = 0; i < 16; i++) {
+          float fi = float(i);
+          float r = sqrt((fi + 0.5) / 16.0) * u_blur;
+          float a = fi * 2.39996323;
+          acc += src(v_uv + vec2(cos(a), sin(a)) * r * px);
+        }
+        c = acc / 17.0;
+      }
+      // 과한 선명도 보정
+      if (u_sharp > 0.0) {
+        vec3 nb = (src(v_uv + vec2(px.x, 0.0)) + src(v_uv - vec2(px.x, 0.0))
+                 + src(v_uv + vec2(0.0, px.y)) + src(v_uv - vec2(0.0, px.y))) * 0.25;
+        c += (c - nb) * u_sharp * 1.5;
+      }
+      // 채도
+      float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      c = clamp(mix(vec3(luma), c, u_sat), 0.0, 1.0);
+      // 대비·색온도·색조·톤커브 (미리 계산한 표)
+      c = vec3(lut(c.r, 0), lut(c.g, 1), lut(c.b, 2));
+      // 스타일: 아이폰 사진 스타일처럼 세대 효과 위에 톤·색을 덧입힘
+      if (u_stOn > 0.5) {
+        vec3 s = pow(max(c * u_stMul, 0.0), vec3(u_stGamma));
+        float l = dot(s, vec3(0.2126, 0.7152, 0.0722));
+        s = mix(vec3(l), s, u_stSat);
+        s = (s - 0.5) * u_stCon + 0.5;
+        s += u_stShadow * (1.0 - l) * (1.0 - l) + u_stHigh * l * l;
+        s = mix(s, vec3(dot(s, vec3(0.2126, 0.7152, 0.0722))), u_stBW);
+        c = clamp(u_stLift + s * (1.0 - u_stLift), 0.0, 1.0);
+      }
+      // 노이즈 (오버레이 합성)
+      if (u_noise > 0.0) {
+        float s = hash12(gl_FragCoord.xy + u_seed * vec2(37.0, 17.0));
+        vec3 ov = mix(2.0 * c * s, 1.0 - 2.0 * (1.0 - c) * (1.0 - s), step(0.5, c));
+        c = mix(c, ov, u_noise * 0.25);
+      }
+      // 주변부 어두워짐
+      if (u_vig > 0.0) {
+        float d = length((v_uv - 0.5) * u_size) / max(u_size.x, u_size.y);
+        c *= 1.0 - u_vig * smoothstep(0.28, 0.72, d);
+      }
+      gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+    }`;
+
+  function shader(type, source) {
+    const s = glc.createShader(type);
+    glc.shaderSource(s, source);
+    glc.compileShader(s);
+    if (!glc.getShaderParameter(s, glc.COMPILE_STATUS)) throw new Error(glc.getShaderInfoLog(s));
+    return s;
+  }
+  const prog = glc.createProgram();
+  glc.attachShader(prog, shader(glc.VERTEX_SHADER, VERT));
+  glc.attachShader(prog, shader(glc.FRAGMENT_SHADER, FRAG));
+  glc.linkProgram(prog);
+  glc.useProgram(prog);
+  const quad = glc.createBuffer();
+  glc.bindBuffer(glc.ARRAY_BUFFER, quad);
+  glc.bufferData(glc.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), glc.STATIC_DRAW);
+  const aPos = glc.getAttribLocation(prog, "a_pos");
+  glc.enableVertexAttribArray(aPos);
+  glc.vertexAttribPointer(aPos, 2, glc.FLOAT, false, 0, 0);
+  const U = {};
+  ["u_src", "u_lut", "u_crop", "u_size", "u_sat", "u_blur", "u_sharp", "u_noise", "u_vig", "u_seed",
+   "u_stOn", "u_stGamma", "u_stSat", "u_stCon", "u_stLift", "u_stBW", "u_stMul", "u_stShadow", "u_stHigh"]
+    .forEach((n) => { U[n] = glc.getUniformLocation(prog, n); });
+
+  function makeTexture(unit) {
+    const t = glc.createTexture();
+    glc.activeTexture(glc.TEXTURE0 + unit);
+    glc.bindTexture(glc.TEXTURE_2D, t);
+    glc.texParameteri(glc.TEXTURE_2D, glc.TEXTURE_WRAP_S, glc.CLAMP_TO_EDGE);
+    glc.texParameteri(glc.TEXTURE_2D, glc.TEXTURE_WRAP_T, glc.CLAMP_TO_EDGE);
+    glc.texParameteri(glc.TEXTURE_2D, glc.TEXTURE_MIN_FILTER, glc.LINEAR);
+    glc.texParameteri(glc.TEXTURE_2D, glc.TEXTURE_MAG_FILTER, glc.LINEAR);
+    return t;
+  }
+  const srcTex = makeTexture(0);
+  const lutTex = makeTexture(1);
+  glc.uniform1i(U.u_src, 0);
+  glc.uniform1i(U.u_lut, 1);
+  const MAX_EDGE = Math.min(4096, glc.getParameter(glc.MAX_TEXTURE_SIZE), glc.getParameter(glc.MAX_VIEWPORT_DIMS)[0]);
+
+  const clamp01 = (v) => Math.min(1, Math.max(0, v));
+  // 다섯 점(0, .25, .5, .75, 1)을 지나는 부드러운 곡선
+  function curveAt(ys, x) {
+    const f = Math.min(x * 4, 3.999999);
+    const i = Math.floor(f), t = f - i;
+    const p0 = ys[Math.max(i - 1, 0)], p1 = ys[i], p2 = ys[i + 1], p3 = ys[Math.min(i + 2, 4)];
+    return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
+  }
+  let lutKey = null;
+  function uploadLUT(look) {
+    const key = [look.contrast, look.warmth, look.tint, look.harshness, look.fade].join();
+    if (key === lutKey) return;
+    lutKey = key;
+    const h = look.harshness, f = look.fade;
+    const ys = [f, 0.25 - 0.1 * h + 0.5 * f, 0.5 + 0.02 * h, Math.min(1, 0.75 + 0.1 * h), 1];
+    const mult = [1 + 0.12 * look.warmth, 1 - 0.06 * look.tint, 1 - 0.12 * look.warmth];
+    const data = new Uint8Array(256 * 4);
+    for (let i = 0; i < 256; i++) {
+      const c = (i / 255 - 0.5) * look.contrast + 0.5;
+      for (let ch = 0; ch < 3; ch++) data[i * 4 + ch] = Math.round(clamp01(curveAt(ys, clamp01(c * mult[ch]))) * 255);
+      data[i * 4 + 3] = 255;
+    }
+    glc.activeTexture(glc.TEXTURE1);
+    glc.bindTexture(glc.TEXTURE_2D, lutTex);
+    glc.texImage2D(glc.TEXTURE_2D, 0, glc.RGBA, 256, 1, 0, glc.RGBA, glc.UNSIGNED_BYTE, data);
+  }
+
+  /** 스타일과 톤·색상·팔레트 값을 셰이더 값으로 바꾼다. 아무 효과가 없으면 null */
+  function styleParams(s) {
+    const def = STYLES.find((x) => x.key === s.key) || STYLES[0];
+    if (def.key === "standard" && !s.tone && !s.color) return null;
+    const p = s.palette;                       // 팔레트 0이면 스타일 색이 빠지고 100이면 그대로
+    const toward = (base) => 1 + (base - 1) * p;
+    const warm = def.warm * p, tint = def.tint * p;
+    return {
+      mul: [1 + 0.2 * warm, 1 - 0.1 * tint, 1 - 0.2 * warm],
+      gamma: Math.pow(2, -(0.45 * s.tone + 1.5 * def.bright * p)),   // 톤: 밝게(+) / 어둡게(-)
+      sat: toward(def.sat) * (1 + 0.5 * s.color),                    // 색상: 선명(+) / 차분(-)
+      con: toward(def.con),
+      lift: def.lift * p,
+      shadow: def.shadow.map((v) => v * p),
+      high: def.high.map((v) => v * p),
+      bw: def.bw,
+    };
+  }
+  const currentStyle = () => styleParams(state.style);
+
+  /** source 의 crop 영역을 w×h 결과로 그린다 */
+  function draw(source, srcW, srcH, crop, w, h, look, style) {
+    if (ui.gl.width !== w || ui.gl.height !== h) { ui.gl.width = w; ui.gl.height = h; }
+    glc.viewport(0, 0, glc.drawingBufferWidth, glc.drawingBufferHeight);
+    glc.activeTexture(glc.TEXTURE0);
+    glc.bindTexture(glc.TEXTURE_2D, srcTex);
+    glc.pixelStorei(glc.UNPACK_FLIP_Y_WEBGL, true);
+    glc.texImage2D(glc.TEXTURE_2D, 0, glc.RGBA, glc.RGBA, glc.UNSIGNED_BYTE, source);
+    glc.pixelStorei(glc.UNPACK_FLIP_Y_WEBGL, false);
+    uploadLUT(look);
+    const longEdge = Math.max(w, h);
+    glc.uniform4f(U.u_crop, crop.sx / srcW, 1 - (crop.sy + crop.sh) / srcH, crop.sw / srcW, crop.sh / srcH);
+    glc.uniform2f(U.u_size, w, h);
+    glc.uniform1f(U.u_sat, look.saturation);
+    glc.uniform1f(U.u_blur, 2 * look.softness * 1.5 * longEdge / 1000);
+    glc.uniform1f(U.u_sharp, look.sharpen);
+    glc.uniform1f(U.u_noise, look.noise);
+    glc.uniform1f(U.u_vig, look.vignette);
+    glc.uniform1f(U.u_seed, Math.floor(Math.random() * 1000));
+    glc.uniform1f(U.u_stOn, style ? 1 : 0);
+    if (style) {
+      glc.uniform3fv(U.u_stMul, style.mul);
+      glc.uniform1f(U.u_stGamma, style.gamma);
+      glc.uniform1f(U.u_stSat, style.sat);
+      glc.uniform1f(U.u_stCon, style.con);
+      glc.uniform1f(U.u_stLift, style.lift);
+      glc.uniform1f(U.u_stBW, style.bw);
+      glc.uniform3fv(U.u_stShadow, style.shadow);
+      glc.uniform3fv(U.u_stHigh, style.high);
+    }
+    glc.drawArrays(glc.TRIANGLE_STRIP, 0, 4);
+  }
+
+  // ---------- 세대별 크기 계산 ----------
+  /** 사진: 화각만큼 가운데를 자르고, 그 세대 화소 수로 줄인다 (키우지는 않음) */
+  function photoPlan(srcW, srcH, gen) {
+    const zoom = Math.max(1, gen.focal / DEVICE_FOCAL);
+    const sw = srcW / zoom, sh = srcH / zoom;
+    let scale = Math.min(1, Math.sqrt((gen.mp * 1e6) / (sw * sh)));
+    scale = Math.min(scale, MAX_EDGE / Math.max(sw, sh));
+    return { sx: (srcW - sw) / 2, sy: (srcH - sh) / 2, sw, sh, w: Math.round(sw * scale), h: Math.round(sh * scale) };
+  }
+  /** 동영상: 그 세대 화면비로 자르고 해상도를 맞춘다 (세로 영상이면 세로로) */
+  function videoPlan(srcW, srcH, gen) {
+    const spec = VIDEO[gen.video];
+    const portrait = srcH > srcW;
+    let w = portrait ? spec.h : spec.w, h = portrait ? spec.w : spec.h;
+    const cap = WEB_VIDEO_EDGE / Math.max(w, h);
+    const capped = cap < 1;
+    if (capped) { w *= cap; h *= cap; }
+    const aspect = w / h;
+    let sw = srcW, sh = srcH;
+    if (sw / sh > aspect) sw = sh * aspect; else sh = sw / aspect;
+    const zoom = Math.max(1, gen.focal / DEVICE_FOCAL);
+    sw /= zoom; sh /= zoom;
+    const even = (v) => Math.max(2, Math.round(v / 2) * 2);
+    return { sx: (srcW - sw) / 2, sy: (srcH - sh) / 2, sw, sh, w: even(w), h: even(h), spec, capped };
+  }
+  const fullCrop = (plan) => ({ sx: 0, sy: 0, sw: plan.w, sh: plan.h });
+
+  // ---------- 안내 표시 ----------
+  let toastTimer = 0;
+  function toast(text) {
+    ui.toast.textContent = text;
+    ui.toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { ui.toast.hidden = true; }, 2200);
+  }
+  function setBusy(text, cancellable) {
+    ui.busy.hidden = !text;
+    if (text) ui.busyText.innerHTML = text;
+    ui.busyCancel.hidden = !cancellable;
+  }
+  function setNote(text, soft) {
+    ui.note.hidden = !text;
+    if (!text) return;
+    if (soft) { ui.note.setAttribute("data-soft", ""); ui.note.innerHTML = ""; const s = document.createElement("span"); s.textContent = text; ui.note.appendChild(s); }
+    else { ui.note.removeAttribute("data-soft"); ui.note.textContent = text; }
+  }
+  const fmtTime = (s) => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+  const signed = (v) => { const n = Math.round(v * 100); return n > 0 ? "+" + n : String(n); };
+  const noVideoText = (gn) => `${gn.name}(${gn.year}년)에는 동영상 촬영 기능이 없었어요.\n3GS(2009년)부터 찍을 수 있어요.`;
+
+  /** 세대 이름·제약·결과 크기 표시. dims = 실제 결과 픽셀 크기 */
+  let headerKey = "";
+  function renderHeader(dims) {
+    const gn = gen();
+    const key = [state.mode, state.view, gn.code, dims ? dims.w + "x" + dims.h : "-", JSON.stringify(state.style)].join("|");
+    if (key === headerKey) return;
+    headerKey = key;
+    ui.genName.textContent = gn.name;
+    ui.genYear.textContent = String(gn.year);
+    const limits = [];
+    if (!gn.af) limits.push("고정초점");
+    if (!gn.flash) limits.push("플래시 없음");
+    if (!gn.front) limits.push("셀카 없음");
+    if (state.mode === "video" && !gn.video) limits.push("동영상 없음");
+    ui.limits.replaceChildren(...limits.map((t) => { const s = document.createElement("span"); s.className = "limit"; s.textContent = t; return s; }));
+
+    const parts = [];
+    if (state.mode === "photo") {
+      parts.push(`<b>${gn.mp}MP</b> 규격`);
+      if (dims) parts.push(`결과 <b>${dims.w}×${dims.h}</b>`);
+      parts.push(`화각 <b>${gn.focal}mm</b>`);
+      parts.push(`JPEG <b>Q${Math.round(gn.look.jpegQuality * 100)}</b>`);
+    } else if (gn.video) {
+      const spec = VIDEO[gn.video];
+      parts.push(`<b>${spec.label}</b> 동영상`);
+      if (dims) parts.push(`결과 <b>${dims.w}×${dims.h}</b>${dims.capped ? " (웹 최대 1080p)" : ""}`);
+      parts.push(`<b>${(Math.min(spec.bitrate, 16e6) / 1e6).toFixed(1)}</b>Mbps`);
+      parts.push(`화각 <b>${gn.focal}mm</b>`);
+    }
+    const sp = currentStyle();
+    if (sp) {
+      const def = STYLES.find((x) => x.key === state.style.key);
+      parts.push(`스타일 <b>${def.name}</b>`);
+      if (state.style.tone || state.style.color) parts.push(`톤 <b>${signed(state.style.tone)}</b> 색상 <b>${signed(state.style.color)}</b>`);
+    }
+    ui.readout.innerHTML = parts.map((p) => `<span>${p}</span>`).join("");
+  }
+
+  // ---------- 그리기용 중간 캔버스 ----------
+  const stage = document.createElement("canvas");
+  const stageCtx = stage.getContext("2d");
+  let stageKey = "";
+  function stageFrom(el, plan, mirror, quality) {
+    if (stage.width !== plan.w || stage.height !== plan.h) { stage.width = plan.w; stage.height = plan.h; }
+    stageCtx.imageSmoothingEnabled = true;
+    stageCtx.imageSmoothingQuality = quality;
+    stageCtx.setTransform(mirror ? -1 : 1, 0, 0, 1, mirror ? plan.w : 0, 0);
+    stageCtx.drawImage(el, plan.sx, plan.sy, plan.sw, plan.sh, 0, 0, plan.w, plan.h);
+    stageCtx.setTransform(1, 0, 0, 1, 0, 0);
+    stageKey = "";
+  }
+  // 같은 사진·같은 세대면 줄인 사진을 다시 만들지 않는다 (스타일 조정 중 빠르게)
+  function preparePhotoStage() {
+    const gn = gen();
+    const src = state.photo;
+    const plan = photoPlan(src.w, src.h, gn);
+    const key = state.photoId + "|" + gn.code;
+    if (key !== stageKey) {
+      stageFrom(src.el, plan, false, "high");
+      stageKey = key;
+    }
+    return plan;
+  }
+
+  // ---------- 카메라 ----------
+  function stopCameraTracks() {
+    if (state.cam.stream) state.cam.stream.getTracks().forEach((t) => t.stop());
+    state.cam.stream = null;
+  }
+  async function startCamera() {
+    if (state.cam.starting) return;
+    if (inViewer) {
+      // claude.ai 화면 안에서는 카메라를 직접 켤 수 없으므로 바로 '카메라 열기' 버튼을 보여준다
+      state.cam.reason = "viewer";
+      refreshView();
+      return;
+    }
+    state.cam.starting = true;
+    refreshView();
+    stopCameraTracks();
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("unsupported");
+      const request = navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { ideal: state.cam.facing }, width: { ideal: 4032 }, height: { ideal: 3024 } },
+      });
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 10000));
+      const stream = await Promise.race([request, timeout]);
+      state.cam.stream = stream;
+      ui.camVideo.srcObject = stream;
+      await ui.camVideo.play().catch(() => {});
+      state.cam.live = true;
+      state.cam.reason = null;
+      if (state.mode === "video") ensureMic();
+    } catch (e) {
+      state.cam.live = false;
+      state.cam.reason = inViewer ? "viewer" : (e && e.name === "NotAllowedError" ? "denied" : "unavailable");
+    }
+    state.cam.starting = false;
+    refreshView();
+    renderThumbsIfOpen();
+  }
+  async function ensureMic() {
+    if (state.cam.audio || state.cam.micAsked || !navigator.mediaDevices) return;
+    state.cam.micAsked = true;
+    try { state.cam.audio = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch (e) { state.cam.audio = null; /* 소리 없이 녹화 */ }
+  }
+  function flipCamera(to) {
+    const next = to || (state.cam.facing === "user" ? "environment" : "user");
+    if (next === state.cam.facing && to) return;
+    state.cam.facing = next;
+    if (state.cam.live) startCamera();
+  }
+  function emptyText() {
+    const gn = gen();
+    if (state.cam.starting) return "카메라를 켜는 중…";
+    if (state.mode === "video" && !gn.video) return noVideoText(gn);
+    if (state.cam.reason === "viewer") return "claude.ai 화면 안에서는 카메라를 바로 켤 수 없어요.\n버튼을 누르면 카메라가 열리고, 찍으면 고른 세대로 바뀝니다.";
+    if (state.cam.reason === "denied") return "카메라 권한이 꺼져 있어요.\n설정 › Safari › 카메라에서 허용하거나, 아래 버튼으로 찍어 주세요.";
+    return "이 브라우저에서는 카메라를 바로 켤 수 없어요.\n버튼을 누르면 카메라가 열립니다.";
+  }
+
+  // ---------- 실시간 화면 ----------
+  let loopId = 0;
+  function stopLoop() { loopId++; }
+  function loopSource() {
+    if (state.view === "camera" && state.cam.live) return { el: ui.camVideo, mirror: state.cam.facing === "user" };
+    if (isPickedReview() && gen().video && !ui.srcVideo.paused) return { el: ui.srcVideo, mirror: false };
+    return null;
+  }
+  function startLoop() {
+    const id = ++loopId;
+    const step = () => {
+      if (id !== loopId) return;
+      const src = loopSource();
+      if (!src) return;
+      renderLiveFrame(src.el, src.mirror);
+      if (state.recording) ui.recTime.textContent = fmtTime((Date.now() - state.recording.start) / 1000);
+      if (state.exporting) ui.busyText.innerHTML = `<span><span class="rec-dot"></span>저장용으로 다시 재생 중 ${fmtTime(ui.srcVideo.currentTime)} / ${fmtTime(ui.srcVideo.duration)}</span>`;
+      requestAnimationFrame(step);
+    };
+    step();
+  }
+  function renderLiveFrame(el, mirror) {
+    const gn = gen();
+    if (!el.videoWidth) return;
+    let plan, dims;
+    if (state.mode === "video" && gn.video) {
+      plan = videoPlan(el.videoWidth, el.videoHeight, gn);
+      dims = plan;
+    } else {
+      dims = photoPlan(el.videoWidth, el.videoHeight, gn);
+      const k = Math.min(1, PREVIEW_EDGE / Math.max(dims.w, dims.h));
+      plan = Object.assign({}, dims, { w: Math.max(2, Math.round(dims.w * k)), h: Math.max(2, Math.round(dims.h * k)) });
+    }
+    stageFrom(el, plan, mirror, "medium");
+    const orig = state.showOriginal;
+    draw(stage, plan.w, plan.h, fullCrop(plan), plan.w, plan.h, orig ? LOOK : gn.look, orig ? null : currentStyle());
+    renderHeader(dims);
+  }
+  const isPickedReview = () => state.view === "review" && !!state.clip && state.clip.kind === "picked";
+  function redrawStill() {
+    if (isPickedReview() && gen().video && ui.srcVideo.paused) renderLiveFrame(ui.srcVideo, false);
+  }
+
+  // ---------- 사진 ----------
+  function capturePhoto() {
+    const v = ui.camVideo;
+    if (!v.videoWidth) return;
+    ui.flash.hidden = false;
+    setTimeout(() => { ui.flash.hidden = true; }, 120);
+    const c = document.createElement("canvas");
+    c.width = v.videoWidth;
+    c.height = v.videoHeight;
+    const x = c.getContext("2d");
+    if (state.cam.facing === "user") x.setTransform(-1, 0, 0, 1, c.width, 0);   // 셀카는 화면에 보인 그대로(좌우 반전)
+    x.drawImage(v, 0, 0, c.width, c.height);
+    setPhoto({ el: c, w: c.width, h: c.height, originalURL: "" });
+    c.toBlob((b) => { if (b && state.photo && state.photo.el === c) state.photo.originalURL = URL.createObjectURL(b); }, "image/jpeg", 0.92);
+  }
+  function setPhoto(p) {
+    if (state.photo && state.photo.originalURL) URL.revokeObjectURL(state.photo.originalURL);
+    if (state.result) { URL.revokeObjectURL(state.result.url); state.result = null; }
+    ui.photoOut.removeAttribute("src");
+    clearReview();
+    state.photo = p;
+    state.photoId++;
+    state.mode = "photo";
+    enterReview();
+  }
+  async function renderPhoto() {
+    const token = ++state.renderToken;
+    const gn = gen();
+    const plan = preparePhotoStage();
+    renderHeader(plan);
+    draw(stage, plan.w, plan.h, fullCrop(plan), plan.w, plan.h, gn.look, currentStyle());
+    // 그 세대의 JPEG 품질로 실제 압축한 결과를 보여준다
+    const blob = await new Promise((r) => ui.gl.toBlob(r, "image/jpeg", gn.look.jpegQuality));
+    if (token !== state.renderToken || !blob) return;
+    if (state.result) URL.revokeObjectURL(state.result.url);
+    state.result = { blob, url: URL.createObjectURL(blob), gen: gn };
+    if (!state.showOriginal) ui.photoOut.src = state.result.url;
+    updateSaveUI();
+  }
+  ui.photoOut.addEventListener("load", () => {
+    if (state.view === "review" && !state.clip && !liveDragging) { ui.photoOut.hidden = false; ui.gl.hidden = true; }
+  });
+  async function loadPhoto(file) {
+    setBusy("사진 불러오는 중");
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.decoding = "async";
+    img.src = url;
+    try {
+      await img.decode();
+    } catch (e) {
+      setBusy(null);
+      URL.revokeObjectURL(url);
+      toast("이 사진 형식은 열 수 없어요");
+      return;
+    }
+    setBusy(null);
+    setPhoto({ el: img, w: img.naturalWidth, h: img.naturalHeight, originalURL: url });
+  }
+
+  // ---------- 동영상: 앨범에서 고른 영상 ----------
+  function loadPickedVideo(file) {
+    const v = ui.srcVideo;
+    if (v.src) URL.revokeObjectURL(v.src);
+    setBusy("동영상 불러오는 중");
+    v.onloadeddata = () => {
+      setBusy(null);
+      clearReview();
+      state.clip = { kind: "picked" };
+      state.mode = "video";
+      state.userPaused = false;
+      enterReview();
+    };
+    v.onerror = () => { setBusy(null); toast("이 동영상 형식은 열 수 없어요"); };
+    v.muted = true;
+    v.loop = true;
+    v.src = URL.createObjectURL(file);
+    v.load();
+  }
+  ui.srcVideo.addEventListener("play", () => { if (isPickedReview() && gen().video) { setNote(null); startLoop(); } });
+  ui.srcVideo.addEventListener("pause", () => {
+    if (isPickedReview() && gen().video && !state.exporting) setNote("일시정지 · 화면을 누르면 재생", true);
+  });
+
+  // ---------- 동영상: 녹화 ----------
+  function pickMime() {
+    if (!window.MediaRecorder || !ui.gl.captureStream) return null;
+    return ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]
+      .find((m) => MediaRecorder.isTypeSupported(m)) || null;
+  }
+  const extFor = (mime) => (mime.startsWith("video/mp4") ? "mp4" : "webm");
+
+  // 화면(효과가 입혀진 캔버스)을 그대로 녹화한다
+  function startRecording() {
+    const gn = gen();
+    if (!gn.video || state.recording) return;
+    const mime = pickMime();
+    if (!mime) { toast("이 브라우저에서는 동영상을 녹화할 수 없어요"); return; }
+    const stream = ui.gl.captureStream(30);
+    if (state.cam.audio) state.cam.audio.getAudioTracks().forEach((t) => stream.addTrack(t));
+    let rec;
+    try {
+      rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: Math.min(VIDEO[gn.video].bitrate, 16e6) });
+    } catch (e) {
+      toast("녹화를 시작하지 못했어요");
+      return;
+    }
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.start(500);
+    const v = ui.camVideo;
+    state.recording = { rec, chunks, mime, stream, start: Date.now(), gen: gn, dims: videoPlan(v.videoWidth, v.videoHeight, gn) };
+    ui.recTime.textContent = "0:00";
+    ui.recbar.hidden = false;
+    ui.shoot.dataset.rec = "1";
+    ui.shoot.setAttribute("aria-label", "녹화 멈추기");
+    applyLocks();
+  }
+  function stopRecording() {
+    const r = state.recording;
+    if (!r) return;
+    state.recording = null;
+    ui.recbar.hidden = true;
+    delete ui.shoot.dataset.rec;
+    applyLocks();
+    r.rec.onstop = () => {
+      r.stream.getVideoTracks().forEach((t) => t.stop());
+      if (!r.chunks.length) { toast("녹화에 실패했어요"); refreshView(); return; }
+      const type = r.mime.split(";")[0];
+      const blob = new Blob(r.chunks, { type });
+      clearReview();
+      state.clip = { kind: "recorded", blob, url: URL.createObjectURL(blob), ext: extFor(r.mime), gen: r.gen, dims: r.dims };
+      ui.reviewVideo.src = state.clip.url;
+      ui.reviewVideo.muted = true;
+      enterReview();
+      ui.reviewVideo.play().catch(() => {});
+    };
+    r.rec.stop();
+  }
+
+  // 앨범 영상은 효과를 입혀 한 번 다시 재생하면서 파일로 만든다 (영상 길이만큼 걸림)
+  const audio = { ctx: null, node: null, dest: null };
+  async function exportPicked() {
+    const gn = gen();
+    const mime = pickMime();
+    if (!mime) { toast("이 브라우저에서는 동영상을 만들 수 없어요"); return; }
+    const v = ui.srcVideo;
+    let audioTracks = [];
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!audio.ctx) audio.ctx = new AC();
+      audio.ctx.resume();
+      if (!audio.node) audio.node = audio.ctx.createMediaElementSource(v);
+      if (!audio.dest) { audio.dest = audio.ctx.createMediaStreamDestination(); audio.node.connect(audio.dest); }
+      audioTracks = audio.dest.stream.getAudioTracks();
+    } catch (e) { audioTracks = []; }
+
+    const stream = ui.gl.captureStream(30);
+    audioTracks.forEach((t) => stream.addTrack(t));
+    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: Math.min(VIDEO[gn.video].bitrate, 16e6) });
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    const job = { cancelled: false, done: null };
+    state.exporting = job;
+    applyLocks();
+    updateSaveUI();
+    setNote(null);
+    setBusy(`<span><span class="rec-dot"></span>저장용으로 다시 재생 중</span>`, true);
+
+    v.pause();
+    v.loop = false;
+    v.muted = false;   // 소리는 녹화용으로만 흐르고 스피커로는 나오지 않음
+    v.currentTime = 0;
+    rec.start(500);
+    v.play().catch(() => job.done && job.done());
+    await new Promise((resolve) => { job.done = resolve; v.onended = resolve; });
+    v.onended = null;
+    await new Promise((resolve) => { rec.onstop = resolve; rec.stop(); });
+    stream.getVideoTracks().forEach((t) => t.stop());
+    v.muted = true;
+    v.loop = true;
+    state.exporting = null;
+    applyLocks();
+    updateSaveUI();
+    setBusy(null);
+    v.play().catch(() => {});
+    if (job.cancelled || !chunks.length) return;
+    await saveBlob(new Blob(chunks, { type: mime.split(";")[0] }), `timecam-${gn.year}-${gn.code}.${extFor(mime)}`);
+  }
+  ui.busyCancel.addEventListener("click", () => {
+    if (!state.exporting) return;
+    state.exporting.cancelled = true;
+    ui.srcVideo.pause();
+    if (state.exporting.done) state.exporting.done();
+  });
+
+  // ---------- 화면 전환 ----------
+  function clearReview() {
+    const clip = state.clip;
+    if (clip && clip.kind === "picked") ui.srcVideo.pause();
+    if (clip && clip.kind === "recorded") {
+      ui.reviewVideo.pause();
+      ui.reviewVideo.removeAttribute("src");
+      ui.reviewVideo.load();
+      URL.revokeObjectURL(clip.url);
+    }
+    state.clip = null;
+  }
+  function enterReview() {
+    state.view = "review";
+    state.showOriginal = false;
+    refreshView();
+    renderThumbsIfOpen();
+  }
+  function backToCamera() {
+    if (state.exporting) return;
+    clearReview();
+    state.view = "camera";
+    refreshView();
+    renderThumbsIfOpen();
+    if (!state.cam.live && !state.cam.starting && state.cam.reason !== "viewer") startCamera();
+  }
+
+  /** 지금 상태에 맞게 화면 구성과 버튼을 정리한다 */
+  function refreshView() {
+    const gn = gen();
+    const { view, mode, clip } = state;
+    const inCamera = view === "camera";
+    const noVideo = mode === "video" && !gn.video;
+
+    ui.modePhoto.setAttribute("aria-pressed", String(mode === "photo"));
+    ui.modeVideo.setAttribute("aria-pressed", String(mode === "video"));
+    ui.shoot.dataset.mode = mode;
+    ui.fileShoot.accept = mode === "photo" ? "image/*" : "video/*";
+    if (!state.recording) ui.shoot.setAttribute("aria-label", mode === "photo" ? "사진 찍기" : "녹화 시작");
+
+    ui.pick.hidden = !inCamera;
+    ui.back.hidden = inCamera;
+    ui.shoot.style.visibility = inCamera ? "visible" : "hidden";
+    ui.shoot.disabled = noVideo;
+    ui.flip.hidden = !(inCamera && state.cam.live);
+
+    ui.gl.hidden = true;
+    ui.photoOut.hidden = true;
+    ui.reviewVideo.hidden = true;
+    ui.empty.hidden = true;
+    ui.compare.hidden = true;
+    setNote(null);
+
+    if (inCamera) {
+      if (!ui.srcVideo.paused) ui.srcVideo.pause();
+      if (state.cam.live) {
+        ui.gl.hidden = false;
+        ui.compare.hidden = false;
+        if (noVideo) setNote(noVideoText(gn));
+        startLoop();
+      } else {
+        stopLoop();
+        ui.empty.hidden = false;
+        ui.emptyText.textContent = emptyText();
+        ui.emptyOpen.hidden = state.cam.starting;
+        ui.emptyOpen.disabled = noVideo;
+        ui.emptyOpen.textContent = mode === "photo" ? "카메라 열기" : "동영상 찍기";
+        renderHeader(null);
+      }
+    } else if (clip && clip.kind === "recorded") {
+      stopLoop();
+      ui.reviewVideo.hidden = false;
+      renderHeader(clip.dims);
+    } else if (clip && clip.kind === "picked") {
+      if (noVideo) {
+        stopLoop();
+        ui.srcVideo.pause();
+        setNote(noVideoText(gn));
+        renderHeader(null);
+      } else {
+        ui.gl.hidden = false;
+        ui.compare.hidden = false;
+        if (ui.srcVideo.paused && !state.userPaused) ui.srcVideo.play().catch(() => {});
+        if (ui.srcVideo.paused) { renderLiveFrame(ui.srcVideo, false); setNote("일시정지 · 화면을 누르면 재생", true); }
+        else startLoop();
+      }
+    } else if (state.photo) {
+      stopLoop();
+      ui.compare.hidden = false;
+      if (state.result) ui.photoOut.hidden = false;
+      renderPhoto();
+    }
+    applyLocks();
+    updateSaveUI();
+  }
+
+  /** 녹화·저장 중이거나 녹화된 영상을 보는 중에는 세대·스타일을 바꿀 수 없다 */
+  function applyLocks() {
+    const busyLock = !!(state.recording || state.exporting);
+    const reviewLock = state.view === "review" && !!state.clip && state.clip.kind === "recorded";
+    const lock = busyLock || reviewLock;
+    state.locked = lock;
+    ui.modePhoto.disabled = busyLock;
+    ui.modeVideo.disabled = busyLock;
+    ui.pick.disabled = busyLock;
+    ui.back.disabled = !!state.exporting;
+    ui.flip.disabled = busyLock || !gen().front;
+    ui.dial.querySelectorAll(".chip").forEach((c) => { c.disabled = lock; });
+    ui.styles.querySelectorAll(".style-btn").forEach((c) => { c.disabled = lock; });
+    ui.palette.disabled = lock || state.style.key === "standard";
+    ui.styleReset.disabled = lock;
+    ui.pad.setAttribute("aria-disabled", String(lock));
+  }
+
+  // ---------- 저장 ----------
+  let downloads = null;
+  let downloadsKnown = !inViewer;
+  if (inViewer) {
+    window.claude.use("downloads")
+      .then((d) => { downloads = d; })
+      .catch(() => {})
+      .finally(() => { downloadsKnown = true; updateSaveUI(); });
+  }
+  const canSave = () => (inViewer ? !!downloads : true);
+
+  async function saveBlob(blob, filename) {
+    if (inViewer) {
+      if (!downloads) return;
+      try {
+        await downloads.save({ filename, data: blob });
+        toast("파일을 내보냈어요");
+      } catch (err) {
+        const code = err && err.code;
+        if (code === "declined") return;
+        if (code === "rate_limited") { toast("잠시 후 다시 눌러 주세요"); return; }
+        if (["unavailable", "not_granted", "capability_disabled", "capability_removed"].includes(code)) { downloads = null; updateSaveUI(); }
+        toast("저장하지 못했어요");
+      }
+      return;
+    }
+    // 홈 화면 웹앱·일반 브라우저: 공유 기능이 있으면 사진 앱에 바로 저장할 수 있게 공유 시트를 연다
+    const file = new File([blob], filename, { type: blob.type });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); return; }
+      catch (e) { if (e && e.name === "AbortError") return; }
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+
+  function updateSaveUI() {
+    const inReview = state.view === "review";
+    const clip = state.clip;
+    let enabled = false, label = "저장";
+    if (clip && clip.kind === "recorded") { enabled = true; label = "영상 저장"; }
+    else if (clip && clip.kind === "picked") { enabled = !!gen().video && !!pickMime(); label = "영상 저장"; }
+    else enabled = !!state.result;
+    ui.save.textContent = label;
+    ui.save.hidden = !inReview || !canSave();
+    ui.save.disabled = !enabled || !!state.exporting;
+    // 이 화면에서 파일 저장을 못 쓰면 대신 할 수 있는 방법을 알려준다
+    const tip = !inReview || !downloadsKnown || canSave() ? ""
+      : !clip ? "사진을 길게 눌러 저장할 수 있어요"
+      : "이 화면에서는 동영상 파일을 저장할 수 없어요";
+    ui.tip.textContent = tip;
+    ui.tip.hidden = !tip;
+  }
+  ui.save.addEventListener("click", () => {
+    const clip = state.clip;
+    if (clip && clip.kind === "recorded") saveBlob(clip.blob, `timecam-${clip.gen.year}-${clip.gen.code}.${clip.ext}`);
+    else if (clip && clip.kind === "picked") exportPicked();
+    else if (state.result) saveBlob(state.result.blob, `timecam-${state.result.gen.year}-${state.result.gen.code}.jpg`);
+  });
+
+  // ---------- 세대 선택 줄 ----------
+  GENS.forEach((gn, i) => {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.type = "button";
+    b.setAttribute("aria-label", `${gn.name}, ${gn.year}년`);
+    b.innerHTML = `<span class="y">${gn.year}</span><span class="n">${gn.name}</span>`;
+    b.addEventListener("click", () => selectGen(i));
+    ui.dial.appendChild(b);
+  });
+  function markDial(scroll) {
+    ui.dial.querySelectorAll(".chip").forEach((c, i) => c.setAttribute("aria-pressed", String(i === state.index)));
+    if (scroll) {
+      const chip = ui.dial.children[state.index];
+      const left = chip.offsetLeft - (ui.dial.clientWidth - chip.offsetWidth) / 2;
+      ui.dial.scrollTo({ left, behavior: scroll === "smooth" ? "smooth" : "auto" });
+    }
+  }
+  function selectGen(i) {
+    if (state.locked) return;
+    i = Math.max(0, Math.min(GENS.length - 1, i));
+    if (i === state.index) return;
+    state.index = i;
+    try { localStorage.setItem("timecam.gen", gen().code); } catch (e) { /* 무시 */ }
+    markDial("smooth");
+    // 셀카 카메라가 없던 세대로 바꾸면 후면 카메라로 돌아간다
+    if (!gen().front && state.cam.facing === "user") flipCamera("environment");
+    renderThumbsIfOpen();
+    refreshView();
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.target && (/input|textarea/i.test(e.target.tagName) || e.target === ui.pad)) return;
+    if (e.key === "ArrowRight") selectGen(state.index + 1);
+    if (e.key === "ArrowLeft") selectGen(state.index - 1);
+  });
+
+  // ---------- 스타일 패널 ----------
+  const thumbCanvas = document.createElement("canvas");
+  const thumbCtx = thumbCanvas.getContext("2d");
+  // 찍기 전·카메라가 없을 때 쓰는 색 견본 (무지개 + 회색 단계)
+  const swatch = (() => {
+    const c = document.createElement("canvas");
+    c.width = 240; c.height = 240;
+    const x = c.getContext("2d");
+    const hue = x.createLinearGradient(0, 0, 240, 0);
+    ["#d6453d", "#e8a33a", "#e6d34a", "#5aa84f", "#3f8fc9", "#6c58b8", "#c9508f"].forEach((col, i, arr) => hue.addColorStop(i / (arr.length - 1), col));
+    x.fillStyle = hue; x.fillRect(0, 0, 240, 150);
+    const shade = x.createLinearGradient(0, 0, 0, 150);
+    shade.addColorStop(0, "rgba(255,255,255,0.35)"); shade.addColorStop(1, "rgba(0,0,0,0.35)");
+    x.fillStyle = shade; x.fillRect(0, 0, 240, 150);
+    const gray = x.createLinearGradient(0, 0, 240, 0);
+    gray.addColorStop(0, "#111"); gray.addColorStop(1, "#f4f4f2");
+    x.fillStyle = gray; x.fillRect(0, 150, 240, 90);
+    return { el: c, w: 240, h: 240 };
+  })();
+  const thumbImgs = STYLES.map((def) => {
+    const b = document.createElement("button");
+    b.className = "style-btn";
+    b.type = "button";
+    const img = document.createElement("img");
+    img.alt = "";
+    const label = document.createElement("span");
+    label.textContent = def.name;
+    b.append(img, label);
+    b.addEventListener("click", () => {
+      if (state.locked) return;
+      state.style.key = def.key;
+      commitStyle();
+    });
+    ui.styles.appendChild(b);
+    return img;
+  });
+
+  function thumbSource() {
+    if (state.view === "camera" && state.cam.live && ui.camVideo.videoWidth)
+      return { el: ui.camVideo, w: ui.camVideo.videoWidth, h: ui.camVideo.videoHeight, mirror: state.cam.facing === "user" };
+    if (isPickedReview() && ui.srcVideo.videoWidth) return { el: ui.srcVideo, w: ui.srcVideo.videoWidth, h: ui.srcVideo.videoHeight };
+    if (state.view === "review" && !state.clip && state.photo) return state.photo;
+    return swatch;
+  }
+  /** 지금 화면을 각 스타일로 작게 그려 선택 버튼에 보여준다 */
+  function renderThumbs() {
+    const src = thumbSource();
+    const gn = gen();
+    const T = 120;
+    const side = Math.min(src.w, src.h) / Math.max(1, gn.focal / DEVICE_FOCAL);
+    thumbCanvas.width = T;
+    thumbCanvas.height = T;
+    thumbCtx.imageSmoothingQuality = "high";
+    thumbCtx.setTransform(src.mirror ? -1 : 1, 0, 0, 1, src.mirror ? T : 0, 0);
+    thumbCtx.drawImage(src.el, (src.w - side) / 2, (src.h - side) / 2, side, side, 0, 0, T, T);
+    thumbCtx.setTransform(1, 0, 0, 1, 0, 0);
+    STYLES.forEach((def, i) => {
+      draw(thumbCanvas, T, T, { sx: 0, sy: 0, sw: T, sh: T }, T, T, gn.look, styleParams({ key: def.key, tone: 0, color: 0, palette: 1 }));
+      thumbImgs[i].src = ui.gl.toDataURL("image/jpeg", 0.82);
+    });
+    // 썸네일을 그리느라 바뀐 화면을 원래대로
+    if (state.view === "review" && !state.clip && state.photo && !ui.gl.hidden) requestLive();
+    redrawStill();
+  }
+  function renderThumbsIfOpen() { if (!ui.stylePanel.hidden) renderThumbs(); }
+
+  function updateStyleUI() {
+    const s = state.style;
+    const def = STYLES.find((x) => x.key === s.key) || STYLES[0];
+    ui.styles.querySelectorAll(".style-btn").forEach((b, i) => b.setAttribute("aria-pressed", String(STYLES[i].key === s.key)));
+    ui.padDot.style.left = ((s.color + 1) / 2) * 100 + "%";
+    ui.padDot.style.top = (1 - (s.tone + 1) / 2) * 100 + "%";
+    ui.toneVal.textContent = signed(s.tone);
+    ui.colorVal.textContent = signed(s.color);
+    ui.palette.value = String(Math.round(s.palette * 100));
+    ui.paletteVal.textContent = String(Math.round(s.palette * 100));
+    ui.styleBadge.textContent = currentStyle() ? def.name : "";
+    applyLocks();
+  }
+
+  // 사진 결과를 조정하는 동안에는 압축 없이 바로 그려서 빠르게 보여주고, 손을 떼면 최종 사진을 만든다
+  let liveRaf = 0;
+  function requestLive() {
+    if (liveRaf) return;
+    liveRaf = requestAnimationFrame(() => {
+      liveRaf = 0;
+      if (state.view === "review" && !state.clip && state.photo) {
+        const plan = preparePhotoStage();
+        draw(stage, plan.w, plan.h, fullCrop(plan), plan.w, plan.h, gen().look, currentStyle());
+        ui.gl.hidden = false;
+        ui.photoOut.hidden = true;
+        renderHeader(plan);
+      } else {
+        redrawStill();
+      }
+    });
+  }
+  function commitStyle() {
+    try { localStorage.setItem("timecam.style", JSON.stringify(state.style)); } catch (e) { /* 무시 */ }
+    updateStyleUI();
+    if (state.view === "review" && !state.clip && state.photo) renderPhoto();
+    else redrawStill();
+  }
+
+  const round2 = (v) => Math.round(Math.max(-1, Math.min(1, v)) * 100) / 100;
+  let liveDragging = false;
+  function padSet(e) {
+    const r = ui.pad.getBoundingClientRect();
+    state.style.color = round2(((e.clientX - r.left) / r.width) * 2 - 1);
+    state.style.tone = round2(1 - ((e.clientY - r.top) / r.height) * 2);
+    updateStyleUI();
+    requestLive();
+  }
+  ui.pad.addEventListener("pointerdown", (e) => {
+    if (state.locked) return;
+    liveDragging = true;
+    ui.pad.setPointerCapture(e.pointerId);
+    padSet(e);
+  });
+  ui.pad.addEventListener("pointermove", (e) => { if (liveDragging) padSet(e); });
+  ["pointerup", "pointercancel"].forEach((t) => ui.pad.addEventListener(t, () => {
+    if (!liveDragging) return;
+    liveDragging = false;
+    commitStyle();
+  }));
+  ui.pad.addEventListener("dblclick", () => {
+    if (state.locked) return;
+    state.style.tone = 0;
+    state.style.color = 0;
+    commitStyle();
+  });
+  ui.pad.addEventListener("keydown", (e) => {
+    const moves = { ArrowUp: [0, 0.1], ArrowDown: [0, -0.1], ArrowLeft: [-0.1, 0], ArrowRight: [0.1, 0] };
+    const m = moves[e.key];
+    if (!m || state.locked) return;
+    e.preventDefault();
+    state.style.color = round2(state.style.color + m[0]);
+    state.style.tone = round2(state.style.tone + m[1]);
+    commitStyle();
+  });
+  ui.palette.addEventListener("input", () => {
+    liveDragging = true;
+    state.style.palette = Number(ui.palette.value) / 100;
+    updateStyleUI();
+    requestLive();
+  });
+  ui.palette.addEventListener("change", () => { liveDragging = false; commitStyle(); });
+  ui.styleReset.addEventListener("click", () => {
+    Object.assign(state.style, { tone: 0, color: 0, palette: 1 });
+    commitStyle();
+  });
+
+  function showTab(which) {
+    const style = which === "style";
+    ui.tabGen.setAttribute("aria-pressed", String(!style));
+    ui.tabStyle.setAttribute("aria-pressed", String(style));
+    ui.dial.hidden = style;
+    ui.stylePanel.hidden = !style;
+    ui.cam.dataset.tab = which;
+    if (style) renderThumbs();
+    else markDial(true);
+  }
+  ui.tabGen.addEventListener("click", () => showTab("gen"));
+  ui.tabStyle.addEventListener("click", () => showTab("style"));
+
+  // ---------- 모드 ----------
+  function setMode(mode) {
+    if (state.mode === mode || state.locked && (state.recording || state.exporting)) return;
+    state.mode = mode;
+    if (mode === "video" && state.cam.live) ensureMic();
+    if (state.view === "review") { backToCamera(); return; }
+    refreshView();
+    renderThumbsIfOpen();
+  }
+  ui.modePhoto.addEventListener("click", () => setMode("photo"));
+  ui.modeVideo.addEventListener("click", () => setMode("video"));
+
+  // ---------- 버튼 ----------
+  function openSystemCamera() { ui.fileShoot.value = ""; ui.fileShoot.click(); }
+  ui.shoot.addEventListener("click", () => {
+    if (state.view !== "camera") return;
+    if (!state.cam.live) { openSystemCamera(); return; }
+    if (state.mode === "photo") capturePhoto();
+    else if (state.recording) stopRecording();
+    else startRecording();
+  });
+  ui.emptyOpen.addEventListener("click", openSystemCamera);
+  ui.pick.addEventListener("click", () => { ui.filePick.value = ""; ui.filePick.click(); });
+  ui.back.addEventListener("click", backToCamera);
+  ui.flip.addEventListener("click", () => { if (!state.locked) flipCamera(); });
+  const onFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (file.type.startsWith("video/")) loadPickedVideo(file);
+    else loadPhoto(file);
+  };
+  ui.filePick.addEventListener("change", onFile);
+  ui.fileShoot.addEventListener("change", onFile);
+
+  // 원본 비교: 누르고 있는 동안 효과 없이
+  function showOriginal(on) {
+    if (state.showOriginal === on) return;
+    state.showOriginal = on;
+    ui.compare.textContent = on ? "원본 보는 중" : "원본";
+    if (state.view === "review" && !state.clip && state.photo) {
+      if (state.photo.originalURL) ui.photoOut.src = on ? state.photo.originalURL : (state.result ? state.result.url : "");
+    } else {
+      redrawStill();
+    }
+  }
+  ui.compare.addEventListener("pointerdown", (e) => { e.preventDefault(); showOriginal(true); });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((t) => ui.compare.addEventListener(t, () => showOriginal(false)));
+  ui.compare.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  // 앨범 동영상 화면을 누르면 재생/일시정지
+  ui.gl.addEventListener("click", () => {
+    if (!isPickedReview() || state.exporting) return;
+    if (ui.srcVideo.paused) { state.userPaused = false; ui.srcVideo.play().catch(() => {}); }
+    else { state.userPaused = true; ui.srcVideo.pause(); }
+  });
+
+  // 앱을 벗어나면 녹화를 마무리하고, 돌아오면 꺼진 카메라를 다시 켠다
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { if (state.recording) stopRecording(); return; }
+    const track = state.cam.stream && state.cam.stream.getVideoTracks()[0];
+    if (state.view === "camera" && state.cam.live && (!track || track.readyState === "ended")) startCamera();
+  });
+
+  // ---------- 시작: 바로 카메라 ----------
+  markDial(true);
+  updateStyleUI();
+  startCamera();
+})();
+</script>
+</body>
+</html>
