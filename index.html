@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#111113">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -18,7 +18,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
 <style>
-/* Layout: one camera-body column — viewfinder, EXIF-style readout, generation/style controls, shutter row.
+/* Layout: a fixed one-screen camera — generation name on top, viewfinder fills the rest, generation strip /
+   style panel, mode switch and shutter row at the bottom. Nothing scrolls vertically.
    Deliberately a single dark look, like a camera screen; yellow is the app's own accent. */
 :root {
   color-scheme: dark;
@@ -35,42 +36,60 @@
   --font-ui: "IBM Plex Sans KR", -apple-system, "Apple SD Gothic Neo", system-ui, sans-serif;
   --font-data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
+html { height: 100%; box-sizing: border-box; overflow: hidden; overscroll-behavior: none; }
 html, body { background: var(--body); color: var(--ink); }
-body { font-family: var(--font-ui); -webkit-font-smoothing: antialiased; word-break: keep-all; }
+body {
+  height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: manipulation;
+  font-family: var(--font-ui); -webkit-font-smoothing: antialiased; word-break: keep-all;
+  -webkit-user-select: none; user-select: none;
+}
 
 .cam {
+  box-sizing: border-box;
+  height: 100%;
   max-width: 540px;
   margin: 0 auto;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 12px 28px;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-block: 8px 10px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
+.cam > * { flex: none; }
 
-.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.brand { font-weight: 600; font-size: 17px; letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 8px; }
-.brand small { font: 500 10px var(--font-data); color: var(--muted); letter-spacing: 0.14em; }
-.modes { display: flex; background: var(--panel); border-radius: 999px; padding: 3px; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; }
+.gen-now { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.gen-name { font: 600 22px/1 var(--font-data); letter-spacing: -0.02em; }
+.gen-year { font: 500 13px var(--font-data); color: var(--muted); }
+.style-toggle {
+  appearance: none; cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  font: 600 13px var(--font-ui); padding: 7px 13px; border-radius: 999px;
+}
+.style-toggle .badge { font: 500 11px var(--font-ui); color: var(--signal); }
+.style-toggle[aria-pressed="true"] { background: var(--signal); border-color: var(--signal); color: var(--signal-ink); }
+.style-toggle[aria-pressed="true"] .badge { color: var(--signal-ink); }
+
+.modes { display: flex; justify-content: center; gap: 24px; }
 .mode {
   appearance: none; border: 0; background: transparent; color: var(--muted);
-  font: 600 13px var(--font-ui); padding: 6px 15px; border-radius: 999px; cursor: pointer;
+  font: 600 14px var(--font-ui); letter-spacing: 0.02em; padding: 2px 4px; cursor: pointer;
 }
-.mode[aria-pressed="true"] { background: var(--signal); color: var(--signal-ink); }
+.mode[aria-pressed="true"] { color: var(--signal); }
 .mode:disabled { opacity: 0.5; cursor: default; }
 
-.finder {
+/* 남는 높이를 모두 화면이 차지한다 */
+.cam > .finder {
+  flex: 1 1 auto;
+  min-height: 0;
   position: relative;
   width: 100%;
-  height: min(58vh, calc((100vw - 32px) * 4 / 3));
-  min-height: 260px;
   background: var(--void);
   border-radius: 6px;
   overflow: hidden;
 }
-/* 스타일 조정 중에는 화면을 줄여 셔터가 한 화면에 보이게 */
-.cam[data-tab="style"] .finder { height: min(40vh, calc((100vw - 32px) * 4 / 3)); }
 .finder > img, .finder > canvas, .finder > video {
   position: absolute; inset: 0;
   width: 100%; height: 100%;
@@ -111,7 +130,7 @@ body { font-family: var(--font-ui); -webkit-font-smoothing: antialiased; word-br
   padding: 24px; font-size: 15px; line-height: 1.55; color: var(--ink);
   background: var(--scrim);
 }
-.note[data-soft] { background: transparent; align-items: flex-end; font-size: 13px; color: var(--ink); pointer-events: none; }
+.note[data-soft] { background: transparent; font-size: 13px; color: var(--ink); pointer-events: none; }
 .note[data-soft] span { background: var(--scrim); padding: 6px 10px; border-radius: 6px; }
 .busy { gap: 12px; flex-direction: column; }
 .busy button {
@@ -121,35 +140,28 @@ body { font-family: var(--font-ui); -webkit-font-smoothing: antialiased; word-br
 .rec-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--rec); margin-right: 6px; }
 .flash { position: absolute; inset: 0; background: var(--void); }
 .toast {
-  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+  position: absolute; left: 50%; top: 46px; transform: translateX(-50%);
   background: var(--panel); color: var(--ink); border: 1px solid var(--line);
   font-size: 13px; padding: 8px 14px; border-radius: 999px; white-space: nowrap;
 }
 
-.gen { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.gen-name { font: 600 30px/1 var(--font-data); letter-spacing: -0.02em; }
-.gen-year { font: 500 14px var(--font-data); color: var(--muted); }
-.limits { display: flex; gap: 6px; flex-wrap: wrap; }
+/* 화면 왼쪽 아래 촬영 정보 (사진 정보 표시처럼) */
+.hud {
+  position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px;
+  background: var(--scrim); border-radius: 6px; padding: 5px 8px; pointer-events: none;
+}
+.limits { display: flex; gap: 4px; flex-wrap: wrap; }
 .limit {
-  font-size: 11px; color: var(--muted); border: 1px solid var(--line);
-  padding: 2px 7px; border-radius: 999px;
+  font-size: 10px; color: var(--ink); border: 1px solid var(--line);
+  padding: 1px 6px; border-radius: 999px;
 }
 .readout {
-  font: 400 12px/1.6 var(--font-data); color: var(--muted);
-  display: flex; flex-wrap: wrap; gap: 2px 14px;
+  font: 400 11px/1.5 var(--font-data); color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 0 10px;
   font-variant-numeric: tabular-nums;
 }
 .readout b { color: var(--ink); font-weight: 500; }
-
-.tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line); }
-.tab {
-  appearance: none; border: 0; background: transparent; cursor: pointer;
-  color: var(--muted); font: 600 14px var(--font-ui);
-  padding: 4px 0 9px; border-bottom: 2px solid transparent; margin-bottom: -1px;
-  display: flex; align-items: center; gap: 6px;
-}
-.tab[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--signal); }
-.tab .badge { font: 500 11px var(--font-ui); color: var(--signal); }
 
 .dial {
   display: flex; gap: 6px;
@@ -185,7 +197,7 @@ body { font-family: var(--font-ui); -webkit-font-smoothing: antialiased; word-br
 .style-btn:disabled { opacity: 0.4; cursor: default; }
 .tune { display: flex; gap: 16px; align-items: center; }
 .pad {
-  position: relative; flex: none; width: 132px; height: 132px; border-radius: 12px;
+  position: relative; flex: none; width: 112px; height: 112px; border-radius: 12px;
   background:
     linear-gradient(var(--line), var(--line)) center / 1px 100% no-repeat,
     linear-gradient(var(--line), var(--line)) center / 100% 1px no-repeat,
@@ -216,7 +228,7 @@ body { font-family: var(--font-ui); -webkit-font-smoothing: antialiased; word-br
 }
 .reset:disabled { opacity: 0.4; cursor: default; }
 
-.actions { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding-top: 4px; }
+.actions { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
 .slot { display: flex; }
 .slot.l { justify-content: flex-start; }
 .slot.r { justify-content: flex-end; }
@@ -228,7 +240,7 @@ body { font-family: var(--font-ui); -webkit-font-smoothing: antialiased; word-br
 .side-btn:disabled { opacity: 0.4; cursor: default; }
 .shutter {
   appearance: none; cursor: pointer;
-  width: 78px; height: 78px; border-radius: 50%;
+  width: 72px; height: 72px; border-radius: 50%;
   border: 4px solid var(--ink); background: transparent; padding: 5px;
 }
 .shutter span { display: block; width: 100%; height: 100%; border-radius: 50%; background: var(--ink); transition: transform 0.15s ease, border-radius 0.15s ease; }
@@ -237,8 +249,6 @@ body { font-family: var(--font-ui); -webkit-font-smoothing: antialiased; word-br
 .shutter[data-rec] span { border-radius: 8px; transform: scale(0.5); }
 .shutter:disabled { opacity: 0.4; cursor: default; }
 
-.tip { font-size: 13px; color: var(--ink); text-align: center; }
-.foot { font-size: 12px; line-height: 1.6; color: var(--muted); max-width: 60ch; }
 .offscreen { position: fixed; width: 2px; height: 2px; opacity: 0; pointer-events: none; left: 0; top: 0; }
 
 button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
@@ -247,13 +257,13 @@ button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 
 </head>
 <body>
-<main class="cam" data-tab="gen">
+<main class="cam">
   <header class="top">
-    <div class="brand">타임캠 <small>WEB</small></div>
-    <div class="modes" role="group" aria-label="촬영 모드">
-      <button class="mode" id="mode-photo" aria-pressed="true">사진</button>
-      <button class="mode" id="mode-video" aria-pressed="false">동영상</button>
+    <div class="gen-now">
+      <span class="gen-name" id="gen-name">4</span>
+      <span class="gen-year" id="gen-year">2010</span>
     </div>
+    <button class="style-toggle" id="style-toggle" aria-pressed="false" aria-controls="style-panel">스타일 <span class="badge" id="style-badge"></span></button>
   </header>
 
   <section class="finder" id="finder" aria-label="카메라 화면">
@@ -270,21 +280,12 @@ button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
     <div class="note busy" id="busy" hidden><span id="busy-text">처리 중</span><button id="busy-cancel" hidden>취소</button></div>
     <div class="flash" id="flash" hidden></div>
     <div class="toast" id="toast" role="status" hidden></div>
-  </section>
-
-  <div>
-    <div class="gen">
-      <span class="gen-name" id="gen-name">4</span>
-      <span class="gen-year" id="gen-year">2010</span>
+    <div class="hud" id="hud">
+      <div class="readout" id="readout" aria-live="polite"></div>
       <div class="limits" id="limits"></div>
     </div>
-    <div class="readout" id="readout" aria-live="polite"></div>
-  </div>
+  </section>
 
-  <div class="tabs" role="group" aria-label="조정 항목">
-    <button class="tab" id="tab-gen" aria-pressed="true">세대</button>
-    <button class="tab" id="tab-style" aria-pressed="false">스타일 <span class="badge" id="style-badge"></span></button>
-  </div>
   <nav class="dial" id="dial" aria-label="세대 선택"></nav>
   <section class="style-panel" id="style-panel" aria-label="스타일" hidden>
     <div class="styles" id="styles"></div>
@@ -303,6 +304,11 @@ button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
     </div>
   </section>
 
+  <div class="modes" role="group" aria-label="촬영 모드">
+    <button class="mode" id="mode-photo" aria-pressed="true">사진</button>
+    <button class="mode" id="mode-video" aria-pressed="false">동영상</button>
+  </div>
+
   <div class="actions">
     <div class="slot l">
       <button class="side-btn" id="pick">앨범</button>
@@ -314,9 +320,6 @@ button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
       <button class="side-btn" id="save" hidden>저장</button>
     </div>
   </div>
-  <p class="tip" id="tip" hidden></p>
-
-  <p class="foot">세대를 고르면 그 시절 아이폰의 화소·화각·색감·노이즈가 입혀지고, 스타일 탭에서 아이폰처럼 톤·색상을 조정할 수 있습니다. 찍은 뒤에도 세대와 스타일을 바꿔 가며 비교해 보세요.</p>
 
   <input id="file-pick" class="offscreen" type="file" accept="image/*,video/*" tabindex="-1" aria-hidden="true">
   <input id="file-shoot" class="offscreen" type="file" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true">
@@ -415,11 +418,11 @@ button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
     empty: $("empty"), emptyText: $("empty-text"), emptyOpen: $("empty-open"),
     recbar: $("recbar"), recTime: $("rec-time"), compare: $("compare"),
     note: $("note"), busy: $("busy"), busyText: $("busy-text"), busyCancel: $("busy-cancel"), flash: $("flash"), toast: $("toast"),
-    genName: $("gen-name"), genYear: $("gen-year"), limits: $("limits"), readout: $("readout"),
-    tabGen: $("tab-gen"), tabStyle: $("tab-style"), styleBadge: $("style-badge"),
+    genName: $("gen-name"), genYear: $("gen-year"), limits: $("limits"), readout: $("readout"), hud: $("hud"),
+    styleToggle: $("style-toggle"), styleBadge: $("style-badge"),
     dial: $("dial"), stylePanel: $("style-panel"), styles: $("styles"), pad: $("pad"), padDot: $("pad-dot"),
     toneVal: $("tone-val"), colorVal: $("color-val"), palette: $("palette"), paletteVal: $("palette-val"), styleReset: $("style-reset"),
-    pick: $("pick"), back: $("back"), shoot: $("shoot"), flip: $("flip"), save: $("save"), tip: $("tip"),
+    pick: $("pick"), back: $("back"), shoot: $("shoot"), flip: $("flip"), save: $("save"),
     filePick: $("file-pick"), fileShoot: $("file-shoot"), camVideo: $("cam-video"), srcVideo: $("src-video"),
   };
   const inViewer = !!(window.claude && typeof window.claude.use === "function");
@@ -737,6 +740,7 @@ button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
       if (state.style.tone || state.style.color) parts.push(`톤 <b>${signed(state.style.tone)}</b> 색상 <b>${signed(state.style.color)}</b>`);
     }
     ui.readout.innerHTML = parts.map((p) => `<span>${p}</span>`).join("");
+    ui.hud.hidden = !parts.length && !limits.length;
   }
 
   // ---------- 그리기용 중간 캔버스 ----------
@@ -1080,6 +1084,8 @@ button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
     state.showOriginal = false;
     refreshView();
     renderThumbsIfOpen();
+    // 이 화면에서 파일 저장을 못 쓰면 대신 할 수 있는 방법을 알려준다
+    if (downloadsKnown && !canSave()) toast(state.clip ? "이 화면에서는 동영상 파일을 저장할 수 없어요" : "사진을 길게 눌러 저장할 수 있어요");
   }
   function backToCamera() {
     if (state.exporting) return;
@@ -1228,12 +1234,6 @@ button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
     ui.save.textContent = label;
     ui.save.hidden = !inReview || !canSave();
     ui.save.disabled = !enabled || !!state.exporting;
-    // 이 화면에서 파일 저장을 못 쓰면 대신 할 수 있는 방법을 알려준다
-    const tip = !inReview || !downloadsKnown || canSave() ? ""
-      : !clip ? "사진을 길게 눌러 저장할 수 있어요"
-      : "이 화면에서는 동영상 파일을 저장할 수 없어요";
-    ui.tip.textContent = tip;
-    ui.tip.hidden = !tip;
   }
   ui.save.addEventListener("click", () => {
     const clip = state.clip;
@@ -1430,18 +1430,15 @@ button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
     commitStyle();
   });
 
-  function showTab(which) {
-    const style = which === "style";
-    ui.tabGen.setAttribute("aria-pressed", String(!style));
-    ui.tabStyle.setAttribute("aria-pressed", String(style));
-    ui.dial.hidden = style;
-    ui.stylePanel.hidden = !style;
-    ui.cam.dataset.tab = which;
-    if (style) renderThumbs();
+  // 스타일 버튼: 아래 세대 줄 자리에 스타일 조정판을 연다/닫는다
+  function setStylePanel(open) {
+    ui.styleToggle.setAttribute("aria-pressed", String(open));
+    ui.stylePanel.hidden = !open;
+    ui.dial.hidden = open;
+    if (open) renderThumbs();
     else markDial(true);
   }
-  ui.tabGen.addEventListener("click", () => showTab("gen"));
-  ui.tabStyle.addEventListener("click", () => showTab("style"));
+  ui.styleToggle.addEventListener("click", () => setStylePanel(ui.stylePanel.hidden));
 
   // ---------- 모드 ----------
   function setMode(mode) {
